@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="/kid-puzzle-qa/">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <!-- 行動裝置 viewport：device-width + initial-scale=1 避免被當桌機頁面縮小；
+       maximum-scale=1 + user-scalable=no 禁止使用者用雙指縮放（教學氣泡尺寸是
+       設計好的、被縮放會破壞 layout，且幼兒可能誤觸縮放）。
+       viewport-fit=cover 讓內容填滿到瀏海螢幕的安全區之外（PWA 全螢幕用）。 -->
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="description" content="專為幼兒設計的益智遊戲集，目前包含拼圖模式。">
+
+  <!-- Open Graph：Facebook / LINE / Discord / Slack 等分享預覽。
+       og:image 必須用絕對 URL — 很多爬蟲不解析 base href，相對路徑會抓錯
+       或被略過。og:image:width / height 給爬蟲 hint、避免它先量再決定要不要抓。 -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://mutsuntsai.github.io/kid-puzzle/">
+  <meta property="og:title" content="幼兒益智遊戲">
+  <meta property="og:description" content="專為幼兒設計的益智遊戲集，目前包含拼圖模式。">
+  <meta property="og:image" content="https://mutsuntsai.github.io/kid-puzzle/og-preview.jpg">
+  <meta property="og:image:width" content="1245">
+  <meta property="og:image:height" content="792">
+
+  <!-- Twitter Card：Twitter / X 分享預覽。summary_large_image 用大圖卡。 -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="幼兒益智遊戲">
+  <meta name="twitter:description" content="專為幼兒設計的益智遊戲集，目前包含拼圖模式。">
+  <meta name="twitter:image" content="https://mutsuntsai.github.io/kid-puzzle/og-preview.jpg">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <!-- iOS 加到主畫面時顯示的名稱 -->
+  <meta name="apple-mobile-web-app-title" content="幼兒益智遊戲">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>幼兒益智遊戲</title>
+  <link rel="manifest" href="manifest.json">
+
+  <!-- 預載關鍵資源：讓瀏覽器在解析 HTML 的同時平行下載，省序列等待。
+       canvaskit.wasm 是 ~1.5 MB 的大檔，越早 fetch 越好。 -->
+  <link rel="preload" href="flutter_bootstrap.js" as="script">
+  <link rel="preload" href="canvaskit/canvaskit.wasm" as="fetch" crossorigin="anonymous">
+  <link rel="preload" href="icons/Icon-512.png" as="image">
+
+  <style>
+    /* 載入期間覆蓋整個畫面的 overlay：logo + 進度條 + 文字。
+       Flutter 主程式 + CanvasKit wasm 加起來在行動網路可能要數秒，
+       這層提供視覺回饋、且分階段推進進度條，讓使用者看到「實際在進展」
+       而非單純轉圈。
+       - 33%：entrypoint 下載完（flutter_bootstrap.js 內 onEntrypointLoaded）
+       - 66%：engine 初始化完
+       - 90%：runApp 已呼叫
+       - 100%：flutter-first-frame + flutter-fonts-ready 都到 → 淡出 + remove */
+    html, body { margin: 0; padding: 0; height: 100%; }
+    body {
+      background: linear-gradient(135deg, #ff8a65, #ffd54f);
+    }
+    #loading {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      background: linear-gradient(135deg, #ff8a65, #ffd54f);
+      transition: opacity 400ms ease-out;
+      z-index: 9999;
+    }
+    #loading.loaded {
+      opacity: 0;
+      pointer-events: none;
+    }
+    #loading .logo {
+      width: 128px;
+      height: 128px;
+      border-radius: 28px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+      animation: float 2.4s ease-in-out infinite;
+    }
+    #loading .label {
+      color: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        "Helvetica Neue", Arial, "PingFang TC", "Microsoft JhengHei", sans-serif;
+      font-size: 18px;
+      font-weight: 600;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    }
+    #loading .bar {
+      width: 200px;
+      height: 8px;
+      background: rgba(255, 255, 255, 0.3);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    #loading .bar-fill {
+      width: 0%;
+      height: 100%;
+      background: #ffffff;
+      border-radius: 4px;
+      transition: width 300ms ease-out;
+    }
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50%      { transform: translateY(-8px); }
+    }
+
+    /* 阻擋類遮罩（in-app browser / 不支援的瀏覽器）共用樣式。
+       預設 display:none，JS 偵測命中時改 display:flex。 */
+    #inapp-browser-notice,
+    #unsupported-browser-notice {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #ff8a65;
+      align-items: center;
+      justify-content: center;
+      z-index: 2147483647;
+      font-family: system-ui, -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+      padding: 32px;
+      box-sizing: border-box;
+      color: #ffffff;
+      text-align: center;
+    }
+    #inapp-browser-notice.show,
+    #unsupported-browser-notice.show { display: flex; }
+    #inapp-browser-notice .card,
+    #unsupported-browser-notice .card {
+      max-width: 480px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    #inapp-browser-notice .icon,
+    #unsupported-browser-notice .icon { font-size: 64px; margin-bottom: 20px; }
+    #inapp-browser-notice .title,
+    #unsupported-browser-notice .title { font-size: 28px; font-weight: 700; margin-bottom: 12px; }
+    #inapp-browser-notice .desc,
+    #unsupported-browser-notice .desc { font-size: 16px; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div id="loading">
+    <img class="logo" src="icons/Icon-512.png" alt="">
+    <div class="label">載入中…</div>
+    <div class="bar"><div class="bar-fill" id="loading-bar"></div></div>
+  </div>
+
+  <script>
+    // 進度條由 flutter_bootstrap.js 三段事件推進（33 / 66 / 90），
+    // 最後 100% 由 flutter-first-frame 觸發。
+    var bar = document.getElementById("loading-bar");
+    function setProgress(v) {
+      if (!bar) return;
+      // 只增不減：避免事件順序意外造成倒退觀感
+      var cur = parseFloat(bar.style.width) || 0;
+      if (v > cur) bar.style.width = v + "%";
+    }
+    window.addEventListener("flutter-loading-progress", function (e) {
+      setProgress((e.detail && e.detail.value) || 0);
+    });
+
+    // 等到「Flutter 第一幀」+「字型實際完成渲染」兩件事都發生才隱藏 overlay。
+    // 注意：不能用 document.fonts.ready —— 某些系統字型在實際 glyph 解碼前就
+    // 提早 resolve，導致 TextPainter / RenderBox 量到的中文字寬仍是 tofu 寬度。
+    // 改由 Flutter 端 probe widget 量到「合理寬度」之後 dispatch
+    // `flutter-fonts-ready` 自訂事件，這層才把 overlay 撤掉。
+    var firstFrame = new Promise(function (resolve) {
+      window.addEventListener("flutter-first-frame", function () {
+        setProgress(100);
+        resolve();
+      }, { once: true });
+    });
+    var fontsReady = new Promise(function (resolve) {
+      window.addEventListener("flutter-fonts-ready", resolve, { once: true });
+    });
+    Promise.all([firstFrame, fontsReady]).then(function () {
+      var el = document.getElementById("loading");
+      if (!el) return;
+      el.classList.add("loaded");
+      // 等淡出動畫跑完再 remove，避免殘留 DOM 節點。
+      setTimeout(function () { el.remove(); }, 500);
+    });
+  </script>
+
+  <!-- In-app browser 提示遮罩：FB / IG / LINE / WeChat 等內嵌 webview 命中時，
+       下方 script 會加上 .show class 顯示此區塊；命中前保持隱藏。
+       z-index 壓在 Flutter canvas 之上、擋住所有互動，使用者唯一出路是用
+       預設瀏覽器重新開啟網址。 -->
+  <div id="inapp-browser-notice">
+    <div class="card">
+      <div class="icon">🌐</div>
+      <div class="title">請用預設瀏覽器開啟</div>
+      <div class="desc">此頁面無法在 App 內建瀏覽器中正常運作，請使用 Safari、Chrome 等預設瀏覽器開啟本網址。</div>
+    </div>
+  </div>
+
+  <!-- 瀏覽器版本過舊提示遮罩：缺 WebAssembly.compileStreaming（Safari 15
+       以下、其它類似世代瀏覽器）時顯示。下方 script 在 SW 註冊前先 feature
+       detect 觸發。 -->
+  <div id="unsupported-browser-notice">
+    <div class="card">
+      <div class="icon">⚠️</div>
+      <div class="title">瀏覽器版本過舊</div>
+      <div class="desc">本應用程式需要支援 WebAssembly streaming 編譯的瀏覽器。請升級至 Safari 15、Chrome 61、Firefox 58 或更新版本後再試。</div>
+    </div>
+  </div>
+
+  <!-- 用 esm.sh CDN 載 inapp-spy（whack-a-mouse 同款偵測庫）；
+       不阻擋 Flutter 載入，命中時才把上方遮罩顯示出來。 -->
+  <script type="module">
+    import InAppSpy from "https://esm.sh/inapp-spy@latest";
+    const { isInApp } = InAppSpy();
+    if (isInApp) {
+      document.getElementById("inapp-browser-notice").classList.add("show");
+    }
+  </script>
+
+  <!-- 啟動 Flutter 前先註冊自製 service worker（取代 Flutter 內建的
+       flutter_service_worker.js — 已棄用，build 時 --pwa-strategy=none）。
+
+       SW 對 same-origin 回應補 COOP=same-origin / COEP=credentialless headers，
+       讓 window.crossOriginIsolated === true，為未來 wasm renderer 鋪路。
+
+       Flow：
+       1. 註冊 SW（首次進站會等它 activate）
+       2. 判斷是否要嘗試 isolated：
+          - Safari（包含 iOS）→ 直接放棄、不檢查、不 reload。原因：實測
+            Safari 26.4 對「SW 注入 COOP/COEP 後 reload 進入 isolated」這條
+            路徑無法成立、會陷入無窮 reload（WebKit bug）。Safari 上 wasm
+            就跑單執行緒、不指望 isolated。
+          - 其它瀏覽器 → 檢查 crossOriginIsolated；true 載 Flutter、false reload
+       3. 兜底：sessionStorage 記 reload 次數，超過 2 次強制放棄、直接載 Flutter
+          以免任何未知 edge case 把使用者卡在 reload loop。
+       不支援 SW 的環境（例如 in-app browser）直接跳過、繼續載入 Flutter。 -->
+  <script>
+    (function () {
+      // 1. Feature detect：太舊的瀏覽器（例如 Safari 14 以下）缺
+      //    WebAssembly.compileStreaming，Flutter web canvaskit / wasm renderer
+      //    都跑不起來。顯示提示遮罩、停止後續載入（含 SW 註冊與 spinner 更新）。
+      if (typeof WebAssembly === "undefined" ||
+          typeof WebAssembly.compileStreaming !== "function") {
+        var u = document.getElementById("unsupported-browser-notice");
+        if (u) u.classList.add("show");
+        var l = document.getElementById("loading");
+        if (l) l.remove();
+        return;
+      }
+
+      var RELOAD_KEY = "__isolatedReloadCount";
+      var MAX_RELOADS = 2;
+
+      // sessionStorage 在隱私模式 / 嚴格隱私設定下 set/get 可能 throw；
+      // 任何 throw 都當作 0 / no-op，絕對不能讓 storage 問題阻斷 Flutter 載入。
+      function getReloadCount() {
+        try {
+          return parseInt(sessionStorage.getItem(RELOAD_KEY) || "0", 10) || 0;
+        } catch (_) { return 0; }
+      }
+      function setReloadCount(n) {
+        try { sessionStorage.setItem(RELOAD_KEY, String(n)); } catch (_) {}
+      }
+      function clearReloadCount() {
+        try { sessionStorage.removeItem(RELOAD_KEY); } catch (_) {}
+      }
+
+      function loadFlutter() {
+        clearReloadCount(); // 成功載入就重置計數
+        var s = document.createElement("script");
+        s.src = "flutter_bootstrap.js";
+        s.async = true;
+        document.body.appendChild(s);
+      }
+
+      // Safari / WebKit 偵測：UA 含 "Safari" 但不含 "Chrome" / "Chromium" /
+      // "Edg"（Chrome 系列在 Safari token 之外都會出現自己的標記）。
+      // iOS 上所有瀏覽器底層都是 WebKit、UA 也走 Safari 規則。
+      function isSafari() {
+        var ua = navigator.userAgent;
+        return /Safari/.test(ua) && !/Chrome|Chromium|Edg/.test(ua);
+      }
+
+      if (!("serviceWorker" in navigator)) {
+        loadFlutter();
+        return;
+      }
+
+      // 兜底：reload 過頭 → 放棄 isolated、直接載
+      var reloadCount = getReloadCount();
+      if (reloadCount >= MAX_RELOADS) {
+        loadFlutter();
+        return;
+      }
+
+      navigator.serviceWorker.register("sw.js").then(function (reg) {
+        function whenActive() {
+          if (reg.active) return Promise.resolve();
+          return new Promise(function (resolve) {
+            var sw = reg.installing || reg.waiting;
+            if (!sw) { resolve(); return; }
+            sw.addEventListener("statechange", function () {
+              if (sw.state === "activated") resolve();
+            });
+          });
+        }
+        whenActive().then(function () {
+          // Safari：放棄 isolated、直接載（reload 也救不了）
+          if (isSafari()) {
+            loadFlutter();
+            return;
+          }
+          if (window.crossOriginIsolated) {
+            loadFlutter();
+          } else {
+            setReloadCount(reloadCount + 1);
+            window.location.reload();
+          }
+        });
+      }).catch(function () {
+        loadFlutter();
+      });
+    })();
+  </script>
+</body>
+</html>
